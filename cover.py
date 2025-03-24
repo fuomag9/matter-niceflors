@@ -1,5 +1,7 @@
 import logging
 import time
+from pathlib import Path
+
 import yaml
 import os
 import json
@@ -27,37 +29,40 @@ CONF_MQTT = "mqtt"
 BUTTON_ID_OPEN = 1
 BUTTON_ID_STOP = 2
 BUTTON_ID_CLOSE = 4
+GPIO_NONE = 0
 
 
 class NextCodeEntity:
-    def __init__(self, start_code: int, config_file: str) -> None:
+    def __init__(self, start_code: int, config_file: str,code_file: str) -> None:
         self._attr_native_value = start_code
         self._config_file = config_file
+        self._code_file = code_file
 
     def increase(self):
         self._attr_native_value = self._attr_native_value + 1
         self._save_to_config()
 
     def _save_to_config(self):
-        """Save the current code value back to the config file."""
         try:
-            with open(self._config_file, 'r') as file:
-                config = yaml.safe_load(file)
-
-            config[CONF_START_CODE] = self._attr_native_value
-
-            with open(self._config_file, 'w') as file:
-                yaml.dump(config, file, default_flow_style=False)
-
+            with open(self._code_file, "r") as code_file:
+                code_file.write(str(self._attr_native_value))
             _LOGGER.debug(f"Updated start_code to {self._attr_native_value}")
         except Exception as e:
             _LOGGER.error(f"Error saving NextCodeEntity value to config: {e}")
 
 
 class RFDevice:
-    def __init__(self, gpio: int, pi: pigpio.pi) -> None:
+    def __init__(
+        self,
+        gpio: int,
+        pi: pigpio,
+    ) -> None:
         self._pi = pi
         self._gpio = gpio
+        #self.tx_pulse_short = 250  # Halved values
+        #self.tx_pulse_long = 500   # Halved values
+        #self.tx_pulse_sync = 750   # Halved values
+        #self.tx_pulse_gap = 7500   # Halved values
         self.tx_pulse_short = 500
         self.tx_pulse_long = 1000
         self.tx_pulse_sync = 1500
@@ -91,44 +96,53 @@ class RFDevice:
 
     def tx_l0(self):
         return [
-            pigpio.pulse(self._gpio, 0, self.tx_pulse_short),
-            pigpio.pulse(0, self._gpio, self.tx_pulse_long),
+            pigpio.pulse(self._gpio, GPIO_NONE, self.tx_pulse_short),
+            pigpio.pulse(GPIO_NONE, self._gpio, self.tx_pulse_long),
         ]
 
     def tx_l1(self):
         return [
-            pigpio.pulse(self._gpio, 0, self.tx_pulse_long),
-            pigpio.pulse(0, self._gpio, self.tx_pulse_short),
+            pigpio.pulse(self._gpio, GPIO_NONE, self.tx_pulse_long),
+            pigpio.pulse(GPIO_NONE, self._gpio, self.tx_pulse_short),
         ]
 
     def tx_sync(self):
         return [
-            pigpio.pulse(self._gpio, 0, self.tx_pulse_sync),
-            pigpio.pulse(0, self._gpio, self.tx_pulse_sync),
+            pigpio.pulse(self._gpio, GPIO_NONE, self.tx_pulse_sync),
+            pigpio.pulse(GPIO_NONE, self._gpio, self.tx_pulse_sync),
         ]
 
     def tx_gap(self):
         return [
-            pigpio.pulse(0, self._gpio, self.tx_pulse_gap),
+            pigpio.pulse(GPIO_NONE, self._gpio, self.tx_pulse_gap),
         ]
 
 
 class NiceBlindController:
-    def __init__(self, config_file: str):
+    def __init__(self, config_file: str, code_file: str) -> None:
         # Load configuration
         with open(config_file, 'r') as file:
             self.config = yaml.safe_load(file)
 
         # RF Device Setup
         self.pi = pigpio.pi(self.config.get(CONF_PIGPIO_HOST, "127.0.0.1"))
-        gpio_pin = self.config.get(CONF_GPIO, 27)
+        gpio_pin = self.config.get(CONF_GPIO, 17)
         self.rf_device = RFDevice(gpio=1 << gpio_pin, pi=self.pi)
 
-        # Next Code Entity
-        self.next_code_entity = NextCodeEntity(
-            self.config.get(CONF_START_CODE, 0x111),
-            config_file
-        )
+        if Path(code_file).is_file():
+            # Next Code Entity
+            self.next_code_entity = NextCodeEntity(
+                int(Path(code_file).read_text()),
+                config_file,
+                code_file
+            )
+        else:
+            # Next Code Entity
+            self.next_code_entity = NextCodeEntity(
+                self.config.get(CONF_START_CODE, 0x111),
+                config_file,
+                code_file
+            )
 
         # Serial Number
         self.serial_number = self.config.get(CONF_SERIAL, 0xabcdef0)
@@ -171,7 +185,7 @@ class NiceBlindController:
             self.rf_device.tx_code(tx_code)
 
     def _nice_flor_s_encode(
-            self, serial: int, code: int, button_id: int, repeat: int
+        self, serial: int, code: int, button_id: int, repeat: int
     ) -> int:
         snbuff = [None] * 4
         snbuff[0] = serial & 0xFF
@@ -305,23 +319,27 @@ class NiceBlindController:
         self.current_position = 100
         self._send_repeated(self.serial_number,BUTTON_ID_OPEN,self.next_code_entity._attr_native_value)
         self._publish_state()
+        self.next_code_entity.increase()
 
     def close_blind(self):
         self.current_position = 0
         self._send_repeated(self.serial_number,BUTTON_ID_CLOSE,self.next_code_entity._attr_native_value)
         self._publish_state()
+        self.next_code_entity.increase()
 
     def stop_blind(self):
         self._send_repeated(self.serial_number,BUTTON_ID_STOP,self.next_code_entity._attr_native_value)
         self._publish_state()
+        self.next_code_entity.increase()
 
 
 def main():
     # Configuration file path
-    config_file = os.path.join(os.path.dirname(__file__), 'nice_blind_config.yaml')
+    config_file = str(Path.cwd() / "nice_blind_config.yaml")
+    code_file = str(Path.cwd() / "code.txt")
 
     # Create blind controller
-    blind_controller = NiceBlindController(config_file)
+    blind_controller = NiceBlindController(config_file,code_file)
 
     try:
         # Start the blind controller
