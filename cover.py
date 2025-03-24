@@ -152,32 +152,27 @@ class NiceBlindController:
         self.target_position = 100
         self.is_moving = False
 
-    def _send_rf_command(self, button_id):
-        """Send RF command with code increment."""
-        current_code = int(self.next_code_entity._attr_native_value)
+    def send(self, serial: int, button_id: int):
+            code = int(self.next_code_entity._attr_native_value)
+            self._send_repeated(serial, button_id, code)
+            self.next_code_entity.increase()
+            time.sleep(0.5)
 
-        # Perform repeated transmission
+    def _send_repeated(self, serial: int, button_id: int, code: int):
         for repeat in range(1, 7):
-            tx_code = self._nice_flor_s_encode(
-                self.serial_number,
-                current_code,
-                button_id,
-                repeat
-            )
+            tx_code = self._nice_flor_s_encode(serial, code, button_id, repeat)
             _LOGGER.info(
-                f"Sending command: serial {hex(self.serial_number)}, "
-                f"button_id {button_id}, code {current_code}"
+                "serial %s, button_id %i, code %i, tx_code %s",
+                hex(serial),
+                button_id,
+                code,
+                hex(tx_code),
             )
             self.rf_device.tx_code(tx_code)
-            time.sleep(0.1)
-
-        # Increment code
-        self.next_code_entity.increase()
 
     def _nice_flor_s_encode(
             self, serial: int, code: int, button_id: int, repeat: int
     ) -> int:
-        # Existing Nice Flor-S encoding logic from previous implementation
         snbuff = [None] * 4
         snbuff[0] = serial & 0xFF
         snbuff[1] = (serial & 0xFF00) >> 8
@@ -208,56 +203,6 @@ class NiceBlindController:
         encoded = encoded >> 4
 
         return encoded
-
-    def open_blind(self):
-        """Open the blind fully."""
-        self._send_rf_command(BUTTON_ID_OPEN)
-        self.current_position = 100
-        self._publish_state()
-
-    def close_blind(self):
-        """Close the blind fully."""
-        self._send_rf_command(BUTTON_ID_CLOSE)
-        self.current_position = 0
-        self._publish_state()
-
-    def stop_blind(self):
-        """Stop the blind's current movement."""
-        self._send_rf_command(BUTTON_ID_STOP)
-        # Retain the last known position
-        self._publish_state()
-
-    def set_position(self, position: int):
-        """Set blind to a specific position."""
-        if position < 0 or position > 100:
-            _LOGGER.error(f"Invalid position: {position}")
-            return
-
-        # Determine the sequence of commands to reach the desired position
-        if position == 100:
-            self.open_blind()
-        elif position == 0:
-            self.close_blind()
-        else:
-            # If already at desired position, do nothing
-            if abs(self.current_position - position) < 5:
-                return
-
-            # Strategy to reach an intermediate position
-            if position > self.current_position:
-                # Need to open more
-                self.open_blind()
-            else:
-                # Need to close more
-                self.close_blind()
-
-            # Stop at approximate position
-            time.sleep(abs(self.current_position - position) * 0.5)
-            self.stop_blind()
-
-            # Update current position
-            self.current_position = position
-            self._publish_state()
 
     def _on_mqtt_connect(self, client, userdata, flags, reason_code, properties=None):
         """Handle MQTT connection."""
@@ -354,6 +299,20 @@ class NiceBlindController:
         """Cleanup resources."""
         self.mqtt_client.disconnect()
         self.pi.stop()
+
+    def open_blind(self):
+        self.current_position = 100
+        self._send_repeated(self.serial_number,BUTTON_ID_OPEN,self.next_code_entity._attr_native_value)
+        self._publish_state()
+
+    def close_blind(self):
+        self.current_position = 0
+        self._send_repeated(self.serial_number,BUTTON_ID_CLOSE,self.next_code_entity._attr_native_value)
+        self._publish_state()
+
+    def stop_blind(self):
+        self._send_repeated(self.serial_number,BUTTON_ID_STOP,self.next_code_entity._attr_native_value)
+        self._publish_state()
 
 
 def main():
