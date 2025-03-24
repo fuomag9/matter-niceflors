@@ -130,12 +130,13 @@ class NiceBlindController:
         self.rf_device = RFDevice(gpio=1 << gpio_pin, pi=self.pi)
 
         if Path(code_file).is_file():
-            # Next Code Entity
-            self.next_code_entity = NextCodeEntity(
-                int(Path(code_file).read_text()),
-                config_file,
-                code_file
-            )
+            if Path(code_file).read_text() != "":
+                # Next Code Entity
+                self.next_code_entity = NextCodeEntity(
+                    int(Path(code_file).read_text()),
+                    config_file,
+                    code_file
+                )
         else:
             # Next Code Entity
             self.next_code_entity = NextCodeEntity(
