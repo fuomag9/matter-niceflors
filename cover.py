@@ -44,7 +44,7 @@ class NextCodeEntity:
 
     def _save_to_config(self):
         try:
-            with open(self._code_file, "r") as code_file:
+            with open(self._code_file, "w") as code_file:
                 code_file.write(str(self._attr_native_value))
             _LOGGER.debug(f"Updated start_code to {self._attr_native_value}")
         except Exception as e:
@@ -335,13 +335,12 @@ class NiceBlindController:
 
 def main():
     # Configuration file path
-    config_file = str(Path.cwd() / "nice_blind_config.yaml")
-    code_file = str(Path.cwd() / "code.txt")
-    if not Path(config_file).exists():
-        Path(config_file).touch()
+    config_file = Path.cwd() / "nice_blind_config.yaml"
+    code_file = Path.cwd() / "code.txt"
+    code_file.touch(exist_ok=True)
 
     # Create blind controller
-    blind_controller = NiceBlindController(config_file,code_file)
+    blind_controller = NiceBlindController(str(config_file),str(code_file))
 
     try:
         # Start the blind controller
