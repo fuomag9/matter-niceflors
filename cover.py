@@ -137,6 +137,13 @@ class NiceBlindController:
                     config_file,
                     code_file
                 )
+            else:
+                # Next Code Entity
+                self.next_code_entity = NextCodeEntity(
+                    self.config.get(CONF_START_CODE, 0x111),
+                    config_file,
+                    code_file
+                )
         else:
             # Next Code Entity
             self.next_code_entity = NextCodeEntity(
