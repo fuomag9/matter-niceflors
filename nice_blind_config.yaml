@@ -1,0 +1,27 @@
+# Nice Flor-S Remote Control Configuration
+
+# Pigpio connection details
+pigpio_host: "127.0.0.1"
+
+# GPIO pin number on Raspberry Pi
+gpio: 27
+
+# Remote control serial number (hexadecimal)
+serial: 0xabcdef0
+
+# Starting code value (will be updated automatically)
+start_code: 0
+
+# Note: This file is automatically updated with the latest code
+# value after each transmission to maintain sequence continuity
+
+# MQTT Configuration
+mqtt:
+  broker: "yourbroker"
+  port: 1883
+  # Optional: Add username and password if your broker requires authentication
+  username: "user"
+  password: "name"
+
+  # Base topic for Home Assistant discovery and communication
+  topic_base: "homeassistant/cover/nice_blind"
