@@ -3,6 +3,8 @@ from __future__ import annotations
 import logging
 import pigpio
 import time
+import yaml
+import os
 
 from threading import Lock
 
@@ -13,6 +15,8 @@ _LOGGER = logging.getLogger(__name__)
 CONF_GPIO = "gpio"
 CONF_SERIAL = "serial"
 CONF_PIGPIO_HOST = "pigpio_host"
+CONF_START_CODE = "start_code"
+CONF_CONFIG_FILE = "config_file"
 DEVICE_CLASS = "shutter"
 
 GPIO_NONE = 0
@@ -26,28 +30,49 @@ class RestoreNumber:
 
 
 class NextCodeEntity(RestoreNumber):
-    def __init__(self, start_code: int) -> None:
+    def __init__(self, start_code: int, config_file: str) -> None:
         self._attr_unique_id = "next_code"
         self._attr_native_value = start_code
         self._attr_icon = "mdi:remote"
         self._attr_name = "Nice Flor-S Next Code"
+        self._config_file = config_file
 
     def increase(self):
         self._attr_native_value = self._attr_native_value + 1
+        # Save the updated code to the yaml file
+        self._save_to_config()
+
+    def _save_to_config(self):
+        """Save the current code value back to the config file."""
+        if not self._config_file:
+            _LOGGER.warning("No config file specified for saving NextCodeEntity value")
+            return
+
+        try:
+            # Load the current config
+            with open(self._config_file, 'r') as file:
+                config = yaml.safe_load(file)
+
+            # Update the start_code value
+            config[CONF_START_CODE] = self._attr_native_value
+
+            # Write back to the file
+            with open(self._config_file, 'w') as file:
+                yaml.dump(config, file, default_flow_style=False)
+
+            _LOGGER.debug(f"Updated {CONF_START_CODE} to {self._attr_native_value} in {self._config_file}")
+        except Exception as e:
+            _LOGGER.error(f"Error saving NextCodeEntity value to config: {e}")
 
 
 class RFDevice:
     def __init__(
-        self,
-        gpio: int,
-        pi: pigpio,
+            self,
+            gpio: int,
+            pi: pigpio,
     ) -> None:
         self._pi = pi
         self._gpio = gpio
-        #self.tx_pulse_short = 250  # Halved values
-        #self.tx_pulse_long = 500   # Halved values
-        #self.tx_pulse_sync = 750   # Halved values
-        #self.tx_pulse_gap = 7500   # Halved values
         self.tx_pulse_short = 500
         self.tx_pulse_long = 1000
         self.tx_pulse_sync = 1500
@@ -104,15 +129,15 @@ class RFDevice:
 
 
 class PigpioNotConnected(BaseException):
-    """"""
+    """Exception raised when connection to pigpio daemon fails."""
 
 
 class NiceHub:
     def __init__(
-        self,
-        pigpio_host: str | None,
-        gpio: int,
-        next_code: NextCodeEntity,
+            self,
+            pigpio_host: str | None,
+            gpio: int,
+            next_code: NextCodeEntity,
     ) -> None:
         self._gpio = gpio
         self._next_code = next_code
@@ -157,7 +182,7 @@ class NiceHub:
             self._rfdevice.tx_code(tx_code)
 
     def _nice_flor_s_encode(
-        self, serial: int, code: int, button_id: int, repeat: int
+            self, serial: int, code: int, button_id: int, repeat: int
     ) -> int:
         snbuff = [None] * 4
         snbuff[0] = serial & 0xFF
@@ -191,3 +216,50 @@ class NiceHub:
         return encoded
 
 
+def load_config(config_file: str) -> dict:
+    """Load configuration from YAML file."""
+    try:
+        with open(config_file, 'r') as file:
+            config = yaml.safe_load(file)
+        return config
+    except Exception as e:
+        _LOGGER.error(f"Error loading config file {config_file}: {e}")
+        return {}
+
+
+def main():
+    # Set up logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+
+    # Default config file location
+    config_file = os.path.join(os.path.dirname(__file__), 'nice_config.yaml')
+
+    # Load config
+    config = load_config(config_file)
+
+    # Get values from config with defaults
+    pigpio_host = config.get(CONF_PIGPIO_HOST, "127.0.0.1")
+    gpio_pin = config.get(CONF_GPIO, 27)
+    serial_number = config.get(CONF_SERIAL, 0xdeadbef)
+    start_code = config.get(CONF_START_CODE, 0x0)
+
+    # Initialize the NextCodeEntity with the config file for persistence
+    next_code_entity = NextCodeEntity(start_code, config_file)
+
+    # Initialize the hub
+    hub = NiceHub(pigpio_host, gpio_pin, next_code_entity)
+
+    try:
+        # Example: send STOP command
+        hub.send(serial_number, BUTTON_ID_CLOSE)
+        _LOGGER.info(f"Command sent successfully. Next code will be: {next_code_entity._attr_native_value}")
+    finally:
+        # Clean up
+        hub.cleanup()
+
+
+if __name__ == "__main__":
+    main()
