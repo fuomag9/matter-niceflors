@@ -272,6 +272,7 @@ class NiceBlindController:
         elif topic.endswith("/set_position"):
             try:
                 position = int(payload)
+                return
                 self.set_position(position)
             except ValueError:
                 _LOGGER.error(f"Invalid position value: {payload}")
