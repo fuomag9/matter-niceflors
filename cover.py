@@ -337,6 +337,8 @@ def main():
     # Configuration file path
     config_file = str(Path.cwd() / "nice_blind_config.yaml")
     code_file = str(Path.cwd() / "code.txt")
+    if not Path(config_file).exists():
+        Path(config_file).touch()
 
     # Create blind controller
     blind_controller = NiceBlindController(config_file,code_file)
