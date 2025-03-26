@@ -5,7 +5,7 @@ This integration allows you to control Nice Flor-S shutters with a Raspberry Pi 
 1. Install requirements.txt
 2. Buy FS1000A and connect to GRND, 5V and GPIO pin 17 (or use another and change the config)
 2. Pair remote by following the flor-s-programming-instructions.pdf (use a flipper zero or follow the master repository or do a hack, if you are using this you know how)
-6. It will now work
+6. It will now work, take note that it will automatically open when service is started to sync the status (as there is no way for the software to retrieve it afaik)
 ## Troubleshooting
 - Make sure that the GPIO pin is correctly configured
 - Make sure that the transmitter is correctly connected to the GPIO pin

@@ -9,11 +9,13 @@ gpio: 27
 # Remote control serial number (hexadecimal)
 serial: 0xabcdef0
 
-# Starting code value (will be updated automatically)
+# Starting code value (will be updated automatically in code.txt)
 start_code: 0
 
-# Note: This file is automatically updated with the latest code
-# value after each transmission to maintain sequence continuity
+# Put here how many time in seconds it takes for the thing to go from open to close, if 0 or less it's disabled and
+# you cannot use the partial open automatically with home assistant
+time_from_open_to_close: 0
+
 
 # MQTT Configuration
 mqtt:

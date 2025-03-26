@@ -23,6 +23,7 @@ CONF_SERIAL = "serial"
 CONF_PIGPIO_HOST = "pigpio_host"
 CONF_START_CODE = "start_code"
 CONF_MQTT = "mqtt"
+CONF_TIME_FROM_OPEN_TO_CLOSE = "time_from_open_to_close"
 
 # Button IDs for Nice Flor-S protocol
 BUTTON_ID_OPEN = 1
@@ -170,8 +171,7 @@ class NiceBlindController:
 
         # Current state tracking
         self.current_position = 100  # Fully open
-        self.target_position = 100
-        self.is_moving = False
+        self.single_button_pressed = False
 
     def send(self, serial: int, button_id: int):
             code = int(self.next_code_entity._attr_native_value)
@@ -291,10 +291,13 @@ class NiceBlindController:
 
         # Handle set position topic
         elif topic.endswith("/set_position"):
+            thingy_time = int(self.config.get(CONF_TIME_FROM_OPEN_TO_CLOSE, 0))
+            is_position_enabled = thingy_time > 0
+            if not is_position_enabled:
+                return
             try:
                 position = int(payload)
-                return
-                self.set_position(position)
+                self.set_position(position,thingy_time)
             except ValueError:
                 _LOGGER.error(f"Invalid position value: {payload}")
 
@@ -323,22 +326,44 @@ class NiceBlindController:
         self.mqtt_client.disconnect()
         self.pi.stop()
 
-    def open_blind(self):
-        self.current_position = 100
+    def open_blind(self,no_change_position=False):
+        if not no_change_position:
+            self.current_position = 100
         self._send_repeated(self.serial_number,BUTTON_ID_OPEN,self.next_code_entity._attr_native_value)
         self._publish_state()
         self.next_code_entity.increase()
+        self.single_button_pressed = True
 
-    def close_blind(self):
-        self.current_position = 0
+    def close_blind(self,no_change_position=False):
+        if not no_change_position:
+            self.current_position = 0
         self._send_repeated(self.serial_number,BUTTON_ID_CLOSE,self.next_code_entity._attr_native_value)
         self._publish_state()
         self.next_code_entity.increase()
+        self.single_button_pressed = True
 
     def stop_blind(self):
         self._send_repeated(self.serial_number,BUTTON_ID_STOP,self.next_code_entity._attr_native_value)
         self._publish_state()
         self.next_code_entity.increase()
+        self.single_button_pressed = True
+
+    def set_position(self, position, thingy_time):
+        if self.single_button_pressed:
+            self.open_blind() # fully open to reset unknown state
+        delta = abs(self.current_position - position)
+        time_to_execute = (delta * thingy_time) / 100
+        if position > self.current_position:
+            self.open_blind(no_change_position=True)
+            time.sleep(time_to_execute)
+            self.stop_blind()
+        else:
+            self.close_blind(no_change_position=True)
+            time.sleep(time_to_execute)
+            self.stop_blind()
+        self.current_position = position
+        self.single_button_pressed = False
+
 
 
 def main():
