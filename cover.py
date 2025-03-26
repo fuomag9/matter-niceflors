@@ -1,13 +1,12 @@
+import json
 import logging
+import threading
 import time
 from pathlib import Path
 
-import yaml
-import os
-import json
 import paho.mqtt.client as mqtt
 import pigpio
-import threading
+import yaml
 
 from encode_tables import NICE_FLOR_S_TABLE_KI, NICE_FLOR_S_TABLE_ENCODE
 
