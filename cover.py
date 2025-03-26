@@ -125,7 +125,7 @@ class NiceBlindController:
 
         # RF Device Setup
         self.pi = pigpio.pi(self.config.get(CONF_PIGPIO_HOST, "127.0.0.1"))
-        gpio_pin = self.config.get(CONF_GPIO, 17)
+        gpio_pin = self.config.get(CONF_GPIO, 27)
         self.rf_device = RFDevice(gpio=1 << gpio_pin, pi=self.pi)
 
         if Path(code_file).is_file():
@@ -297,8 +297,6 @@ class NiceBlindController:
                 self.set_position(position)
             except ValueError:
                 _LOGGER.error(f"Invalid position value: {payload}")
-
-    # ... (rest of the methods remain the same as in the previous implementation)
 
     def start(self):
         """Start the MQTT client and connect to broker."""
