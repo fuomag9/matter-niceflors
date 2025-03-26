@@ -3,6 +3,7 @@ import logging
 import threading
 import time
 from pathlib import Path
+from time import sleep
 
 import paho.mqtt.client as mqtt
 import pigpio
@@ -172,6 +173,7 @@ class NiceBlindController:
         # Current state tracking
         self.current_position = 100  # Fully open
         self.single_button_pressed = False
+        self.startup_time : float
 
     def send(self, serial: int, button_id: int):
             code = int(self.next_code_entity._attr_native_value)
@@ -231,9 +233,8 @@ class NiceBlindController:
             _LOGGER.info("Connected to MQTT Broker")
 
             # Subscribe to command topic
-            command_topic = f"{self.mqtt_topic_base}/set"
-            client.subscribe(command_topic)
-
+            client.subscribe(f"{self.mqtt_topic_base}/set")
+            client.subscribe(f"{self.mqtt_topic_base}/set_position")
             # Publish discovery information for Home Assistant
             self._publish_discovery()
 
@@ -277,6 +278,10 @@ class NiceBlindController:
         """Handle incoming MQTT messages."""
         topic = message.topic
         payload = message.payload.decode()
+        thingy_time = int(self.config.get(CONF_TIME_FROM_OPEN_TO_CLOSE, 0))
+        if (time.time() - self.startup_time < thingy_time) and thingy_time > 0:
+            return #do not process commands when booting up
+
 
         _LOGGER.info(f"Received message on {topic}: {payload}")
 
@@ -320,6 +325,8 @@ class NiceBlindController:
 
         #going to up position at boot
         self.open_blind()
+        self.startup_time = time.time()
+
 
     def cleanup(self):
         """Cleanup resources."""
@@ -362,6 +369,7 @@ class NiceBlindController:
             time.sleep(time_to_execute)
             self.stop_blind()
         self.current_position = position
+        self._publish_state()
         self.single_button_pressed = False
 
 
