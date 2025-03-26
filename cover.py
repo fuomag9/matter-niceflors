@@ -318,6 +318,9 @@ class NiceBlindController:
         mqtt_thread.daemon = True
         mqtt_thread.start()
 
+        #going to up position at boot
+        self.open_blind()
+
     def cleanup(self):
         """Cleanup resources."""
         self.mqtt_client.disconnect()
