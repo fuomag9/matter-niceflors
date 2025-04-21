@@ -324,7 +324,7 @@ class NiceBlindController:
         mqtt_thread.start()
 
         #going to up position at boot
-        self.close_blind()
+        self.open_blind()
         self.startup_time = time.time()
 
 
