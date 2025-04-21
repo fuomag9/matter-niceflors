@@ -27,9 +27,9 @@ CONF_MQTT = "mqtt"
 CONF_TIME_FROM_OPEN_TO_CLOSE = "time_from_open_to_close"
 
 # Button IDs for Nice Flor-S protocol
-BUTTON_ID_OPEN = 1
+BUTTON_ID_OPEN = 4
 BUTTON_ID_STOP = 2
-BUTTON_ID_CLOSE = 4
+BUTTON_ID_CLOSE = 1
 GPIO_NONE = 0
 
 
