@@ -27,9 +27,9 @@ CONF_MQTT = "mqtt"
 CONF_TIME_FROM_OPEN_TO_CLOSE = "time_from_open_to_close"
 
 # Button IDs for Nice Flor-S protocol
-BUTTON_ID_OPEN = 4
+BUTTON_ID_OPEN = 1
 BUTTON_ID_STOP = 2
-BUTTON_ID_CLOSE = 1
+BUTTON_ID_CLOSE = 4
 GPIO_NONE = 0
 
 
@@ -265,9 +265,9 @@ class NiceBlindController:
 
         # Determine state based on current position
         if self.current_position == 100:
-            state = "closed"
-        elif self.current_position == 0:
             state = "open"
+        elif self.current_position == 0:
+            state = "closed"
         else:
             state = "partially_open"
 
@@ -324,7 +324,7 @@ class NiceBlindController:
         mqtt_thread.start()
 
         #going to up position at boot
-        self.close_blind()
+        self.open_blind()
         self.startup_time = time.time()
 
 
@@ -333,18 +333,18 @@ class NiceBlindController:
         self.mqtt_client.disconnect()
         self.pi.stop()
 
-    def close_blind(self, no_change_position=False):
+    def open_blind(self,no_change_position=False):
         if not no_change_position:
             self.current_position = 100
-        self._send_repeated(self.serial_number,BUTTON_ID_CLOSE,self.next_code_entity._attr_native_value)
+        self._send_repeated(self.serial_number,BUTTON_ID_OPEN,self.next_code_entity._attr_native_value)
         self._publish_state()
         self.next_code_entity.increase()
         self.single_button_pressed = True
 
-    def open_blind(self, no_change_position=False):
+    def close_blind(self,no_change_position=False):
         if not no_change_position:
             self.current_position = 0
-        self._send_repeated(self.serial_number,BUTTON_ID_OPEN,self.next_code_entity._attr_native_value)
+        self._send_repeated(self.serial_number,BUTTON_ID_CLOSE,self.next_code_entity._attr_native_value)
         self._publish_state()
         self.next_code_entity.increase()
         self.single_button_pressed = True
@@ -357,15 +357,15 @@ class NiceBlindController:
 
     def set_position(self, position, thingy_time):
         if self.single_button_pressed:
-            self.close_blind() # fully open to reset unknown state
+            self.open_blind() # fully open to reset unknown state
         delta = abs(self.current_position - position)
         time_to_execute = (delta * thingy_time) / 100
         if position > self.current_position:
-            self.close_blind(no_change_position=True)
+            self.open_blind(no_change_position=True)
             time.sleep(time_to_execute)
             self.stop_blind()
         else:
-            self.open_blind(no_change_position=True)
+            self.close_blind(no_change_position=True)
             time.sleep(time_to_execute)
             self.stop_blind()
         self.current_position = position
