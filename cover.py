@@ -264,9 +264,9 @@ class NiceBlindController:
         position_topic = f"{self.mqtt_topic_base}/position"
 
         # Determine state based on current position
-        if self.current_position == 0:
+        if self.current_position == 100:
             state = "open"
-        elif self.current_position == 100:
+        elif self.current_position == 0:
             state = "closed"
         else:
             state = "partially_open"
@@ -335,7 +335,7 @@ class NiceBlindController:
 
     def open_blind(self,no_change_position=False):
         if not no_change_position:
-            self.current_position = 0
+            self.current_position = 100
         self._send_repeated(self.serial_number,BUTTON_ID_OPEN,self.next_code_entity._attr_native_value)
         self._publish_state()
         self.next_code_entity.increase()
@@ -343,7 +343,7 @@ class NiceBlindController:
 
     def close_blind(self,no_change_position=False):
         if not no_change_position:
-            self.current_position = 100
+            self.current_position = 0
         self._send_repeated(self.serial_number,BUTTON_ID_CLOSE,self.next_code_entity._attr_native_value)
         self._publish_state()
         self.next_code_entity.increase()
