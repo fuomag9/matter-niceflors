@@ -3,10 +3,9 @@ import logging
 import threading
 import time
 from pathlib import Path
-from time import sleep
+import RPi.GPIO as GPIO
 
 import paho.mqtt.client as mqtt
-import pigpio
 import yaml
 
 from encode_tables import NICE_FLOR_S_TABLE_KI, NICE_FLOR_S_TABLE_ENCODE
@@ -56,67 +55,51 @@ class RFDevice:
     def __init__(
         self,
         gpio: int,
-        pi: pigpio,
     ) -> None:
-        self._pi = pi
         self._gpio = gpio
-        #self.tx_pulse_short = 250  # Halved values
-        #self.tx_pulse_long = 500   # Halved values
-        #self.tx_pulse_sync = 750   # Halved values
-        #self.tx_pulse_gap = 7500   # Halved values
-        self.tx_pulse_short = 500
-        self.tx_pulse_long = 1000
-        self.tx_pulse_sync = 1500
-        self.tx_pulse_gap = 15000
+        GPIO.setmode(GPIO.BCM)
+        GPIO.setup(self._gpio, GPIO.OUT, initial=GPIO.LOW)
+
+        self.tx_pulse_short = 500e-6
+        self.tx_pulse_long = 1000e-6
+        self.tx_pulse_sync = 1500e-6
+        self.tx_pulse_gap = 0.015
         self.tx_length = 52
 
     def tx_code(self, code: int):
-        wf = []
-        wf.extend(self.tx_sync())
         rawcode = format(code, "#0{}b".format(self.tx_length))[2:]
-        for bit in range(0, self.tx_length):
-            if rawcode[bit] == "1":
-                wf.extend(self.tx_l0())
+
+        self.tx_sync()
+        for bit in rawcode:
+            if bit == "1":
+                self.tx_l0()
             else:
-                wf.extend(self.tx_l1())
-        wf.extend(self.tx_sync())
-        wf.extend(self.tx_gap())
-
-        while self._pi.wave_tx_busy():
-            time.sleep(0.1)
-
-        self._pi.wave_clear()
-        self._pi.wave_add_generic(wf)
-        wave = self._pi.wave_create()
-        self._pi.wave_send_once(wave)
-
-        while self._pi.wave_tx_busy():
-            time.sleep(0.1)
-
-        self._pi.wave_delete(wave)
+                self.tx_l1()
+        self.tx_sync()
+        self.tx_gap()
 
     def tx_l0(self):
-        return [
-            pigpio.pulse(self._gpio, GPIO_NONE, self.tx_pulse_short),
-            pigpio.pulse(GPIO_NONE, self._gpio, self.tx_pulse_long),
-        ]
+        GPIO.output(self._gpio, GPIO.HIGH)
+        time.sleep(self.tx_pulse_short)
+        GPIO.output(self._gpio, GPIO.LOW)
+        time.sleep(self.tx_pulse_long)
 
     def tx_l1(self):
-        return [
-            pigpio.pulse(self._gpio, GPIO_NONE, self.tx_pulse_long),
-            pigpio.pulse(GPIO_NONE, self._gpio, self.tx_pulse_short),
-        ]
+        GPIO.output(self._gpio, GPIO.HIGH)
+        time.sleep(self.tx_pulse_long)
+        GPIO.output(self._gpio, GPIO.LOW)
+        time.sleep(self.tx_pulse_short)
 
     def tx_sync(self):
-        return [
-            pigpio.pulse(self._gpio, GPIO_NONE, self.tx_pulse_sync),
-            pigpio.pulse(GPIO_NONE, self._gpio, self.tx_pulse_sync),
-        ]
+        GPIO.output(self._gpio, GPIO.HIGH)
+        time.sleep(self.tx_pulse_sync)
+        GPIO.output(self._gpio, GPIO.LOW)
+        time.sleep(self.tx_pulse_sync)
 
     def tx_gap(self):
-        return [
-            pigpio.pulse(GPIO_NONE, self._gpio, self.tx_pulse_gap),
-        ]
+        GPIO.output(self._gpio, GPIO.LOW)
+        time.sleep(self.tx_pulse_gap)
+
 
 
 class NiceBlindController:
@@ -126,9 +109,8 @@ class NiceBlindController:
             self.config = yaml.safe_load(file)
 
         # RF Device Setup
-        self.pi = pigpio.pi(self.config.get(CONF_PIGPIO_HOST, "127.0.0.1"))
-        gpio_pin = self.config.get(CONF_GPIO, 27)
-        self.rf_device = RFDevice(gpio=1 << gpio_pin, pi=self.pi)
+        gpio_pin = self.config.get(CONF_GPIO, 17)
+        self.rf_device = RFDevice(gpio=gpio_pin)
 
         if Path(code_file).is_file():
             if Path(code_file).read_text() != "":
@@ -331,7 +313,7 @@ class NiceBlindController:
     def cleanup(self):
         """Cleanup resources."""
         self.mqtt_client.disconnect()
-        self.pi.stop()
+        GPIO.cleanup()
 
     def open_blind(self,no_change_position=False):
         if not no_change_position:
