@@ -246,12 +246,10 @@ class NiceBlindController:
         position_topic = f"{self.mqtt_topic_base}/position"
 
         # Determine state based on current position
-        if self.current_position == 100:
-            state = "open"
-        elif self.current_position == 0:
+        if self.current_position == 0:
             state = "closed"
         else:
-            state = "partially_open"
+            state = "open"
 
         self.mqtt_client.publish(state_topic, state)
         self.mqtt_client.publish(position_topic, str(self.current_position))
